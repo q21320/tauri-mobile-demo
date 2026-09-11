@@ -1,116 +1,245 @@
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
-}
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box
   }
 
-  a:hover {
-    color: #24c8db;
+  body {
+    background: #000;
+    color: #fff;
+    height: 100vh;
+    overflow: hidden
   }
 
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+  #slideBox {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center
   }
-  button:active {
-    background-color: #0f0f0f69;
+
+  #pageImg {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain
   }
-}
+
+  .page-hint {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0.6
+  }
+
+  /* 设备信息触发按钮 */
+  .device-info-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+    transition: background 0.2s;
+  }
+
+  .device-info-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  /* 弹窗遮罩层 */
+  .dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+
+  /* 设备信息弹窗 */
+  .device-dialog {
+    background: #fff;
+    border-radius: 12px;
+    width: 320px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    animation: dialogIn 0.2s ease-out;
+  }
+
+  @keyframes dialogIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  /* 弹窗头部 */
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #eee;
+  }
+
+  .dialog-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .dialog-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: none;
+    font-size: 20px;
+    color: #999;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.2s;
+  }
+
+  .dialog-close:hover {
+    background: #f0f0f0;
+    color: #333;
+  }
+
+  /* 弹窗内容 */
+  .dialog-body {
+    padding: 20px;
+  }
+
+  .info-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+
+  .info-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .info-label {
+    color: #666;
+    min-width: 80px;
+    flex-shrink: 0;
+  }
+
+  .info-value {
+    color: #333;
+    flex: 1;
+    word-break: break-all;
+  }
+
+  .info-input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    color: #333;
+  }
+
+  .info-input:focus {
+    border-color: #1890ff;
+  }
+
+  .info-input::placeholder {
+    color: #bbb;
+  }
+
+  /* 弹窗底部按钮 */
+  .dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid #eee;
+  }
+
+  .btn-cancel {
+    padding: 8px 24px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    color: #666;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-cancel:hover {
+    border-color: #999;
+    color: #333;
+  }
+
+  .btn-confirm {
+    padding: 8px 24px;
+    border: none;
+    border-radius: 6px;
+    background: #1890ff;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .btn-confirm:hover {
+    background: #40a9ff;
+  }
+
+  .btn-confirm:disabled {
+    background: #a0cfff;
+    cursor: not-allowed;
+  }
+
+  /* IoT 上传结果 Toast 提示 */
+  .iot-toast {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #fff;
+    z-index: 300;
+    animation: toastIn 0.3s ease-out;
+    max-width: 90vw;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .iot-toast-success {
+    background: #52c41a;
+  }
+
+  .iot-toast-error {
+    background: #ff4d4f;
+  }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
