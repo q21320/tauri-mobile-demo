@@ -96,7 +96,7 @@ async fn start_websocket(app_handle: tauri::AppHandle) {
         let device_name = get_device_name(&config_dir);
 
         let url = format!(
-            "wss://uatv2-robot.haihuman.com/haicommand/api/v2/iotSocket?did={}&name={}&tempId=Tiot2411151626zwou",
+            "wss://robot.haihuman.com/haicommand/api/v2/iotSocket?did={}&name={}&tempId=Tiot26091110353mtf",
             device_id, device_name
         );
         println!("[ws] 连接 WebSocket: {}", url);
@@ -192,7 +192,49 @@ async fn handle_ws_message(app_handle: &tauri::AppHandle, text: &str) {
         "show" => {
             println!("[ws] 收到 show 消息: {}", msg.data);
             if let Ok(show_req) = serde_json::from_str::<ShowReq>(&msg.data) {
-                let _ = app_handle.emit("page_change", show_req.page);
+                // 根据 fileName 查找并加载 PDF
+                let files_dir = std::path::Path::new(
+                    "/storage/emulated/0/Android/data/com.pdf_link_demo.app/files"
+                );
+                let target_path = if let Some(ref name) = show_req.file_name {
+                    // 在目录中查找匹配的文件名
+                    let matched = std::fs::read_dir(files_dir)
+                        .ok()
+                        .and_then(|entries| {
+                            entries.filter_map(|e| e.ok()).find(|e| {
+                                e.file_name().to_string_lossy() == name.as_str()
+                            })
+                        });
+                    matched.map(|e| e.path())
+                } else {
+                    None
+                };
+
+                // 如果找到文件，加载到 PdfState
+                if let Some(path) = target_path {
+                    println!("[ws] show 加载文件: {}", path.display());
+                    match std::fs::read(&path) {
+                        Ok(bytes) => {
+                            let len = bytes.len();
+                            let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            let state = app_handle.state::<Mutex<PdfState>>();
+                            let mut state = state.lock().unwrap();
+                            state.data = Some(bytes);
+                            println!("[ws] PdfState 已更新: {} ({} bytes)", fname, len);
+                        }
+                        Err(e) => {
+                            eprintln!("[ws] 读取文件失败: {}", e);
+                        }
+                    }
+                } else {
+                    println!("[ws] show: 未找到文件 {:?}", show_req.file_name);
+                }
+
+                // 发送事件通知前端加载指定页
+                let _ = app_handle.emit("pdf_show", &serde_json::json!({
+                    "fileName": show_req.file_name,
+                    "page": show_req.page
+                }));
             }
         }
         other => {

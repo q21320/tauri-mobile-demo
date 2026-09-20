@@ -15,6 +15,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const intervalRef = useRef(null);
   const [pdfData, setPdfData] = useState(null);
+  const pendingPageRef = useRef(null); // pdf_show 待渲染的页码
 
   // IoT 上传结果提示
   const [iotToast, setIotToast] = useState('');
@@ -27,6 +28,7 @@ function App() {
   const [savingDeviceName, setSavingDeviceName] = useState(false);
 
   // 从 Rust 获取并加载 PDF
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const loadPdf = () => {
     console.log('[App] 请求 PDF 数据...');
     invoke('get_pdf_data').then(bytes => {
@@ -45,16 +47,16 @@ function App() {
           console.error('[App] 处理 PDF 失败:', e);
         }
       } else {
-        console.log('[App] 没有外部 PDF，加载内置 test.pdf');
+        console.log('[App] 没有外部 PDF 数据');
       }
     }).catch(err => {
       console.error('[App] invoke get_pdf_data 失败:', err);
-      console.log('[App] 回退到内置 test.pdf');
     });
   };
 
+  // 启动时不自动加载，等待 show 消息
   useEffect(() => {
-    loadPdf();
+    console.log('[App] 等待 WebSocket show 消息...');
   }, []);
 
   useEffect(() => {
@@ -83,7 +85,16 @@ function App() {
     pdfjsLib.getDocument(loadParam).promise.then(doc => {
       pdfDocRef.current = doc;
       setTotalPage(doc.numPages);
-      renderPage(1);
+      
+      // 如果有待渲染页码，渲染目标页；否则渲染第 1 页
+      const targetPage = pendingPageRef.current;
+      if (targetPage) {
+        pendingPageRef.current = null;
+        console.log('[App] useEffect 渲染目标页:', targetPage);
+        renderPage(targetPage);
+      } else {
+        renderPage(1);
+      }
     }).catch(error => {
       console.error('Error loading PDF:', error);
       alert('无法加载PDF文件: ' + error.message);
@@ -140,14 +151,16 @@ function App() {
     };
   }, []);
 
-  // 监听文件下载完成，重新加载 PDF
+  // 监听 pdf_show 事件：加载指定 PDF 并跳转到指定页
   useEffect(() => {
-    const unlisten = listen('ws_data_synced', (event) => {
-      const count = event.payload;
-      console.log('[WS] 文件同步完成，共', count, '个文件，重新加载 PDF');
-      setIotToast(`已同步 ${count} 个文件，加载中...`);
-      if (iotToastTimer.current) clearTimeout(iotToastTimer.current);
-      iotToastTimer.current = setTimeout(() => setIotToast(''), 3000);
+    const unlisten = listen('pdf_show', async (event) => {
+      const { fileName, page } = event.payload;
+      console.log('[App] 收到 pdf_show:', fileName, '第', page, '页');
+      
+      // 设置待渲染页码，useEffect 加载 PDF 后会直接渲染此页
+      pendingPageRef.current = page;
+      
+      // 加载 PDF 数据（会触发 useEffect）
       loadPdf();
     });
     return () => {
