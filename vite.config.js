@@ -7,9 +7,9 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
-  // Build target: Android WebView 110 (Chrome 110)
+  // Build target: Android 11 WebView (Chrome 80)
   build: {
-    target: 'chrome110',
+    target: 'chrome80',
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

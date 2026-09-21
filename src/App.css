@@ -19,10 +19,36 @@
     justify-content: center
   }
 
-  #pageImg {
+  #pageCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
     max-width: 100%;
     max-height: 100%;
-    object-fit: contain
+    object-fit: contain;
+    display: block
+  }
+
+  /* 预渲染加载提示 */
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 100;
+  }
+
+  .loading-text {
+    color: #fff;
+    font-size: 16px;
+    opacity: 0.8;
   }
 
   .page-hint {
@@ -30,7 +56,13 @@
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    opacity: 0.6
+    opacity: 0.6;
+    animation: pageHintFadeOut 0.5s ease-out 3s forwards
+  }
+
+  @keyframes pageHintFadeOut {
+    from { opacity: 0.6; }
+    to { opacity: 0; }
   }
 
   /* 设备信息触发按钮 */
@@ -38,23 +70,25 @@
     position: fixed;
     top: 16px;
     right: 16px;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255, 255, 255, 0.15);
+    min-width: 44px;
+    height: 44px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 2px solid #fff;
+    background: #333;
     color: #fff;
+    font-size: 14px;
+    font-weight: bold;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100;
-    backdrop-filter: blur(4px);
+    z-index: 9999;
     transition: background 0.2s;
   }
 
   .device-info-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: #555;
   }
 
   /* 弹窗遮罩层 */
