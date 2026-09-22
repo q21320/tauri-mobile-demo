@@ -280,6 +280,21 @@ function App() {
     };
   }, []);
 
+  // 监听 ws_data_synced 事件，文件下载完成后重新加载 PDF
+  useEffect(() => {
+    const offWsDataSynced = listen('ws_data_synced', (event) => {
+      console.log('[App] 收到 ws_data_synced 事件, 重新加载 PDF');
+      // 清除当前缓存，强制重新加载
+      pdfDocRef.current = null;
+      pageImagesRef.current = [];
+      setPageImages([]);
+      loadPdf(1);
+    });
+    return () => {
+      offWsDataSynced.then(fn => fn());
+    };
+  }, [loadPdf]);
+
   // 监听 pdf_show 事件：带防抖（300ms）
   useEffect(() => {
     const unlisten = listen('pdf_show', (event) => {
