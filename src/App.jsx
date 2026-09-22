@@ -17,6 +17,8 @@ function App() {
   // 预渲染相关
   const [pageImages, setPageImages] = useState([]);   // 所有页面的 data URL 数组
   const pageImagesRef = useRef([]); // 用 ref 追踪 pageImages，避免闭包陈旧值
+  const renderedPagesRef = useRef([]); // 当前已渲染的页码列表（1-based）
+  const cancelRenderRef = useRef(false); // 取消当前渲染标记
   const [renderProgress, setRenderProgress] = useState(''); // 预渲染进度文本
   const isRenderingRef = useRef(false); // 是否正在预渲染中
   const initializedRef = useRef(false); // StrictMode 防重复初始化
@@ -30,58 +32,52 @@ function App() {
   const [iotToast, setIotToast] = useState('');
   const iotToastTimer = useRef(null);
 
+  const handleTap = useCallback((e) => {
+    if (e.target.closest('.device-info-btn')) return;
+    const x = e.clientX;
+    if (x === undefined) return;
+    const nextPage = x < window.innerWidth / 2 ? currentPage - 1 : currentPage + 1;
+    if (nextPage >= 1 && nextPage <= totalPage) {
+      setCurrentPage(nextPage);
+    }
+  }, [currentPage, totalPage]);
+
   // 设备信息弹窗状态
   const [showDeviceDialog, setShowDeviceDialog] = useState(false);
   const [deviceInfo, setDeviceInfo] = useState({ device_id: '', device_name: '', attachment_info: '' });
   const [deviceNameInput, setDeviceNameInput] = useState('');
   const [savingDeviceName, setSavingDeviceName] = useState(false);
 
-  // 预渲染所有页面：先显示第一页，再后台预渲染剩余页面
-  const renderAllPages = useCallback(async (pdfDoc, initialPage) => {
+  // 预渲染页面：targetPages 为指定页码数组（1-based），不传则渲染全部
+  const renderAllPages = useCallback(async (pdfDoc, initialPage, targetPages) => {
+    // 取消正在进行的渲染
     if (isRenderingRef.current) {
-      console.log('[App] renderAllPages: 已有渲染任务进行中，跳过');
-      return;
+      console.log('[App] renderAllPages: 取消正在进行的渲染任务');
+      cancelRenderRef.current = true;
     }
     isRenderingRef.current = true;
+    cancelRenderRef.current = false;
 
     const totalPages = pdfDoc.numPages;
+    const pagesToRender = targetPages || Array.from({ length: totalPages }, (_, i) => i + 1);
     const pageImagesArr = [];
+    const renderedPageNums = [];
     const t0 = performance.now();
 
-    console.log('[App] 开始渲染, 总页数:', totalPages, ', 初始页:', initialPage);
+    console.log('[App] 开始渲染, 目标页数:', pagesToRender.length, '/', totalPages, ', 初始页:', initialPage);
 
     try {
-      // 第一步：先渲染初始页并立即显示
-      const firstPage = await pdfDoc.getPage(initialPage);
-      const unscaledWidth = firstPage.getViewport({ scale: 1 }).width;
-      const unscaledHeight = firstPage.getViewport({ scale: 1 }).height;
-      const scaleX = window.innerWidth / unscaledWidth;
-      const scaleY = window.innerHeight / unscaledHeight;
-      let scale = Math.min(scaleX, scaleY, 1.5);
-      const viewport = firstPage.getViewport({ scale });
+      for (let idx = 0; idx < pagesToRender.length; idx++) {
+        if (cancelRenderRef.current) {
+          console.log('[App] 渲染任务已取消');
+          isRenderingRef.current = false;
+          return;
+        }
 
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d');
-      await firstPage.render({ canvasContext: ctx, viewport }).promise;
+        const pageNum = pagesToRender[idx];
+        setRenderProgress(`正在渲染第 ${idx + 1}/${pagesToRender.length} 页...`);
 
-      // 把第一页放到数组对应位置
-      while (pageImagesArr.length < initialPage) pageImagesArr.push(null);
-      pageImagesArr[initialPage - 1] = canvas.toDataURL('image/png');
-
-      // 立即更新 state，显示第一页
-      pageImagesRef.current = [...pageImagesArr];
-      setPageImages([...pageImagesArr]);
-      setCurrentPage(initialPage);
-      setRenderProgress('');
-      console.log(`[App] 第 ${initialPage} 页已显示，后台预渲染剩余页面...`);
-
-      // 第二步：后台预渲染剩余页面
-      for (let i = 1; i <= totalPages; i++) {
-        if (i === initialPage) continue; // 跳过已渲染的页
-
-        const page = await pdfDoc.getPage(i);
+        const page = await pdfDoc.getPage(pageNum);
         const uw = page.getViewport({ scale: 1 }).width;
         const uh = page.getViewport({ scale: 1 }).height;
         const sx = window.innerWidth / uw;
@@ -89,32 +85,39 @@ function App() {
         let s = Math.min(sx, sy, 1.5);
         const vp = page.getViewport({ scale: s });
 
-        const c = document.createElement('canvas');
-        c.width = vp.width;
-        c.height = vp.height;
-        const cx = c.getContext('2d');
-        await page.render({ canvasContext: cx, viewport: vp }).promise;
+        const canvas = document.createElement('canvas');
+        canvas.width = vp.width;
+        canvas.height = vp.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
 
-        pageImagesArr[i - 1] = c.toDataURL('image/png');
-        // 每渲染完一页更新 ref（不频繁触发 re-render）
-        pageImagesRef.current = [...pageImagesArr];
-
-        console.log(`[App] 后台预渲染: 第 ${i}/${totalPages} 页完成`);
+        pageImagesArr[idx] = canvas.toDataURL('image/png');
+        renderedPageNums[idx] = pageNum;
+        console.log(`[App] 预渲染: 第 ${idx + 1}/${pagesToRender.length} 页完成 (实际第 ${pageNum} 页)`);
       }
 
       const elapsed = (performance.now() - t0).toFixed(0);
-      console.log(`[App] 全部 ${totalPages} 页预渲染完成, 耗时 ${elapsed} ms`);
+      console.log(`[App] ${pagesToRender.length} 页预渲染完成, 耗时 ${elapsed} ms`);
 
-      // 全部完成，最终更新 state
+      // 全部完成后才显示
       pageImagesRef.current = [...pageImagesArr];
+      renderedPagesRef.current = [...renderedPageNums];
       setPageImages([...pageImagesArr]);
+      // currentPage 存储的是 pageImages 数组的 1-based 索引
+      const displayPageNum = pagesToRender.includes(initialPage) ? initialPage : pagesToRender[0];
+      const displayIdx = renderedPageNums.indexOf(displayPageNum);
+      setCurrentPage(displayIdx !== -1 ? displayIdx + 1 : 1);
+      setRenderProgress('');
       setTotalPage(totalPages);
 
       // 处理 pending page
       if (pendingPageRef.current) {
         const p = pendingPageRef.current;
         pendingPageRef.current = null;
-        setCurrentPage(p);
+        const pIdx = renderedPageNums.indexOf(p);
+        if (pIdx !== -1) {
+          setCurrentPage(pIdx + 1);
+        }
       }
     } catch (e) {
       console.error('[App] renderAllPages 出错:', e);
@@ -147,7 +150,8 @@ function App() {
           loadingFileRef.current = null;
           const page = targetPage || 1;
           if (pageImagesRef.current.length > 0) {
-            setCurrentPage(page);
+            const idx = renderedPagesRef.current.indexOf(page);
+            setCurrentPage(idx !== -1 ? idx + 1 : 1);
           } else {
             pendingPageRef.current = page;
           }
@@ -203,7 +207,7 @@ function App() {
   }, [renderAllPages]);
 
   // 处理 pdf_show 事件的核心逻辑（含去重）
-  const handlePdfShow = useCallback((fileName, page) => {
+  const handlePdfShow = useCallback((fileName, page, targetPages) => {
     // 去重：相同的 fileName + page 组合直接忽略
     const last = lastShowRef.current;
     if (last && last.fileName === fileName && last.page === page) {
@@ -212,16 +216,26 @@ function App() {
     }
     lastShowRef.current = { fileName, page };
 
-    console.log('[App] 处理 pdf_show:', fileName, '第', page, '页');
+    console.log('[App] 处理 pdf_show:', fileName, '第', page, '页, targetPages:', targetPages);
 
-    // 如果文档已加载且预渲染已完成，视为同一文件直接翻页
+    // 如果文档已加载且是同一文件
     const isSameFile = pdfDocRef.current?.doc && pageImagesRef.current.length > 0 && pdfDocRef.current.fileName === fileName;
     if (isSameFile) {
-      console.log('[App] 同一文件翻页, 切换显示第', page, '页');
-      setCurrentPage(page);
+      // 检查目标页是否已在已渲染列表中
+      const renderedIdx = renderedPagesRef.current.indexOf(page);
+      if (renderedIdx !== -1) {
+        console.log('[App] 目标页已渲染, 直接切换显示第', page, '页 (索引', renderedIdx, ')');
+        setCurrentPage(renderedIdx + 1); // 1-based index
+        return;
+      }
+      // 目标页未渲染，需要重新渲染指定页面
+      console.log('[App] 目标页未渲染, 重新渲染 targetPages:', targetPages);
+      pageImagesRef.current = [];
+      renderedPagesRef.current = [];
+      setPageImages([]);
+      renderAllPages(pdfDocRef.current.doc, page, targetPages);
     } else if (isRenderingRef.current || loadingFileRef.current) {
-      // 关键修复：只要有加载或预渲染在进行中，就只记录目标页码，不触发重新加载
-      // 这覆盖了 pdfDocRef.current 为 null 但初始 loadPdf 正在进行的竞态情况
+      // 有加载或预渲染在进行中，只记录目标页码
       console.log('[App] 加载/预渲染进行中, 目标页设为第', page, '页');
       pendingPageRef.current = page;
     } else {
@@ -229,11 +243,12 @@ function App() {
       console.log('[App] 切换文件, 重新加载:', fileName);
       pdfDocRef.current = { doc: null, fileName };
       pageImagesRef.current = [];
+      renderedPagesRef.current = [];
       setPageImages([]); // 清除旧页面数据，显示加载遮罩
       pendingPageRef.current = page;
       loadPdf(page);
     }
-  }, [loadPdf]);
+  }, [loadPdf, renderAllPages]);
 
   // 启动时加载 PDF（作为后备，确保首次加载不依赖 pdf_show 事件时序）
   // 使用 initializedRef 防止 StrictMode 双重挂载导致重复加载
@@ -257,7 +272,10 @@ function App() {
 
       // 预渲染已完成，直接切换页码
       if (pdfDocRef.current?.doc && pageNum >= 1 && pageNum <= totalPage && pageImagesRef.current.length > 0) {
-        setCurrentPage(pageNum);
+        const idx = renderedPagesRef.current.indexOf(pageNum);
+        if (idx !== -1) {
+          setCurrentPage(idx + 1); // 1-based index
+        }
       }
     });
 
@@ -287,6 +305,7 @@ function App() {
       // 清除当前缓存，强制重新加载
       pdfDocRef.current = null;
       pageImagesRef.current = [];
+      renderedPagesRef.current = [];
       setPageImages([]);
       loadPdf(1);
     });
@@ -298,8 +317,8 @@ function App() {
   // 监听 pdf_show 事件：带防抖（300ms）
   useEffect(() => {
     const unlisten = listen('pdf_show', (event) => {
-      const { fileName, page } = event.payload;
-      console.log('[App] 收到 pdf_show:', fileName, '第', page, '页');
+      const { fileName, page, targetPages } = event.payload;
+      console.log('[App] 收到 pdf_show:', fileName, '第', page, '页, targetPages:', targetPages);
 
       // 防抖：清除之前的定时器，300ms 后执行
       if (debounceTimerRef.current) {
@@ -307,7 +326,7 @@ function App() {
       }
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null;
-        handlePdfShow(fileName, page);
+        handlePdfShow(fileName, page, targetPages);
       }, 300);
     });
     return () => {
@@ -351,7 +370,7 @@ function App() {
   };
 
   return (
-    <div id="slideBox" ref={slideBoxRef}>
+    <div id="slideBox" ref={slideBoxRef} onClick={handleTap}>
       {/* 加载提示 - 当前页图片未就绪时显示 */}
       {(pageImages.length === 0 || (currentPage >= 1 && currentPage <= pageImages.length && !pageImages[currentPage - 1])) && (
         <div className="loading-overlay">
@@ -359,21 +378,23 @@ function App() {
         </div>
       )}
 
+      {/* 页码提示 */}
+      {totalPage > 0 && pageImages.length > 0 && (
+        <div className="page-hint">{currentPage} / {totalPage}</div>
+      )}
+
       {/* 显示当前页 - 预渲染完成后用 img 展示（需确保当前页图片已渲染） */}
       {pageImages.length > 0 && currentPage >= 1 && currentPage <= pageImages.length && pageImages[currentPage - 1] && (
-        <>
-          <img
-            id="pageCanvas"
-            src={pageImages[currentPage - 1]}
-            alt={`Page ${currentPage}`}
-          />
-          <div className="page-hint">第 {currentPage} 页 / 共 {totalPage} 页</div>
-        </>
+        <img
+          id="pageCanvas"
+          src={pageImages[currentPage - 1]}
+          alt={`Page ${renderedPagesRef.current[currentPage - 1] || currentPage}`}
+        />
       )}
 
       {/* 设备信息触发按钮 */}
       <button className="device-info-btn" onClick={openDeviceDialog} title="设备信息">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
           <line x1="8" y1="21" x2="16" y2="21"/>
           <line x1="12" y1="17" x2="12" y2="21"/>

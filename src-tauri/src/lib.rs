@@ -453,7 +453,19 @@ async fn handle_ws_data(app_handle: &tauri::AppHandle, data_json: &str) {
     for file in &files {
         let dst = files_dir.join(&file.name);
 
-        // 始终重新下载，确保修改时间最新（rescan 按修改时间排序）
+        // 检查本地文件是否已存在
+        if dst.exists() {
+            log_info!("[ws] 文件已存在，跳过下载: {} (更新修改时间)", file.name);
+            // 更新修改时间，确保 rescan 按时间排序时能识别为最新
+            let now = std::time::SystemTime::now();
+            if let Ok(f) = std::fs::OpenOptions::new().write(true).open(&dst) {
+                let _ = f.set_modified(now);
+            }
+            downloaded += 1;
+            continue;
+        }
+
+        // 不存在才下载
         log_info!("[ws] 下载文件: {} -> {}", file.url, dst.display());
         match client.get(&file.url).send().await {
             Ok(resp) => {
